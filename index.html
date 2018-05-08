@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+</head>
+<body style="margin: 0; padding: 0;">
+
+	<div class="loading" style="position:fixed;top:20px;right:20px;font-size: 30px;color:white;">
+		0/0
+	</div>
+	<script src="node_modules/three/build/three.min.js"></script>
+	<script src="slice.js"></script>
+
+  	<script src="node_modules/stats.js/build/stats.min.js"></script>
+  	<script src="node_modules/three/examples/js/controls/OrbitControls.js"></script>
+
+	<script type="text/javascript">
+		var renderer = new THREE.WebGLRenderer();
+		renderer.setPixelRatio(window.devicePixelRatio/2);
+    	var camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 20000 );
+    	var controls = new THREE.OrbitControls( camera, renderer.domElement );
+
+		var stats = new Stats();
+		stats.showPanel( 0 );
+
+		document.body.appendChild( stats.dom );
+		renderer.setSize(window.innerWidth, window.innerHeight);
+		document.querySelector('body').appendChild(renderer.domElement);
+
+
+
+		var scene;
+
+		fetch('scene.json?' + new Date().getTime())
+			.then((res) => res.json())
+			.then((sceneObject) => {
+				scene = new THREE.ObjectLoader().parse(sceneObject);
+
+				var cameraPositionObject = scene.getObjectByName('camera-position');
+				camera.position.copy(cameraPositionObject.position);
+				camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+				var sphere = scene.getObjectByName('sphere');
+				var terrain = scene.getObjectByName('terrain');
+
+				terrain.geometry.computeBoundingBox();
+				var boundingBox = terrain.geometry.boundingBox;
+
+				console.log(boundingBox);
+
+
+				var boundingBoxPoints = [
+					[boundingBox.min.x, boundingBox.min.z],
+					[boundingBox.max.x, boundingBox.max.z]
+				];
+
+				boundingBoxPoints.forEach(function (point) {
+					// console.log(point);
+
+					var geometry = new THREE.SphereBufferGeometry(3, 32, 32);
+					var material = new THREE.MeshBasicMaterial( {color: 0xff0000} );
+					var sphere = new THREE.Mesh( geometry, material );
+
+					sphere.position.x = point[0] + Math.random()/4;
+					sphere.position.z = point[1] + Math.random()/4;
+					sphere.position.y = 15;
+
+					scene.add( sphere );
+				})
+
+
+
+				// var boundingBox = {
+				// 	min: {x:0, z: 0},
+				// 	max: {x:100, z: 100}
+				// }
+				// setFromCoplanarPoints
+				// setFromNormalAndCoplanarPoint
+
+				var SLICES = 5;
+				var squares = [];
+				for (var i = 0; i < SLICES; i++) {
+					for (var j = 0; j < SLICES; j++) {
+
+						// var square = {
+						// 	min: {
+						// 		x: boundingBox.min.x * 1/(i+1),
+						// 		z: boundingBox.min.z * 1/(j+1)
+						// 	},
+						// 	max: {
+						// 		x: boundingBox.max.x * 1/(i+1),
+						// 		z: boundingBox.max.z * 1/(j+1)
+						// 	}
+						// };
+
+						var partSizeX = Math.abs(boundingBox.min.x - boundingBox.max.x) / SLICES;
+						var partSizeZ = Math.abs(boundingBox.min.z - boundingBox.max.z) / SLICES;
+
+						var startingPoint = {
+							x: boundingBox.min.x + partSizeX * i,
+							z: boundingBox.min.z + partSizeZ * j
+						};
+
+						// console.log(i, j)
+						var square = [
+							
+								new THREE.Vector3(
+									startingPoint.x,
+									0,
+									startingPoint.z
+								)
+							,
+							
+								new THREE.Vector3(
+									startingPoint.x + partSizeX,
+									0,
+									startingPoint.z
+								)
+							,
+								new THREE.Vector3(
+									startingPoint.x + partSizeX,
+									0,
+									startingPoint.z + partSizeZ
+								)
+							,
+							
+								new THREE.Vector3(
+									startingPoint.x,
+									0,
+									startingPoint.z + partSizeZ
+								)
+							
+						];
+
+						// if (i>0 || j>1) {
+
+						// } else {
+							squares.push(square);
+						// }
+					}
+				}
+
+				console.log(squares);
+
+				squares.forEach(function (square) {
+					console.log(square);
+
+					var colors = [0xffff00, 0x00ff00, 0xff0000, 0xf000f0];
+
+					var color = colors[
+						Math.round(
+							Math.random() * (colors.length -1)
+							)
+						];
+
+					square.forEach(function (point) {
+						// console.log(point);
+
+						var geometry = new THREE.SphereBufferGeometry(1, 32, 32);
+						var material = new THREE.MeshBasicMaterial( {color: color} );
+						var sphere = new THREE.Mesh( geometry, material );
+
+						sphere.position.x = point.x + Math.random();
+						sphere.position.z = point.z + Math.random();
+						sphere.position.y = 20;
+
+						scene.add( sphere );
+					})
+
+				});
+
+
+
+				var geometries = [];
+				
+
+				setInterval(function(){
+					document.querySelector('.loading').innerHTML = `${geometries.length}/${SLICES*SLICES}`;
+				}, 500);
+
+
+				squares.forEach(function (square) {
+					// return;
+					var geometry = new THREE.Geometry().fromBufferGeometry(scene.getObjectByName('terrain').geometry);	
+					// var square = squares[0];
+					for (var i = 0; i < 4; i++) {
+
+						if (square[i+1]) {
+							var ray = new THREE.Ray(square[i]);
+							ray.lookAt(square[i+1]);
+						} else {
+							var ray = new THREE.Ray(square[i]);
+							ray.lookAt(square[0]);
+						}			
+						var plane = new THREE.Plane();
+						plane.setFromNormalAndCoplanarPoint(ray.direction, square[i]);
+
+						var geometry = sliceGeometry(geometry, plane);
+						var material = new THREE.MeshBasicMaterial({ wireframe: true });
+					}
+
+					var mesh = new THREE.Mesh(geometry, material);
+					console.log(new THREE.BufferGeometry().fromGeometry(geometry).toJSON())
+					// mesh.position.y = mesh.position.y + Math.random() * 30;
+					geometries.push(mesh);
+					scene.add(mesh);
+					mesh.material.visible = false;
+				});
+
+
+
+				var raycaster = new THREE.Raycaster(
+					sphere.position,
+					new THREE.Vector3(0, -1, 0),
+					0,
+					2000
+				);
+
+				var loop = function () {
+					requestAnimationFrame(loop);
+					stats.begin();
+
+					controls.update();
+
+					sphere.position.x = 50 * Math.sin(new Date().getTime() / 1000);
+					sphere.position.z = 50 * Math.cos(new Date().getTime() / 1000);
+
+					sphere.position.y = 100;
+
+					var intersect = raycaster.intersectObjects(geometries)[0];
+
+					if (intersect && intersect.point) {
+						sphere.position.y = intersect.point.y + 1;
+					}
+
+					renderer.render(scene, camera);
+					stats.end();
+				};
+				loop();
+			});
+
+
+			/*
+			
+			var terrainGeometry = new THREE.Geometry().fromBufferGeometry(scene.getObjectByName('terrain').geometry);
+			
+			//var planeGeometry = new THREE.Geometry().fromBufferGeometry(scene.getObjectByName('plane').geometry);
+			//var planeGeometry = scene.getObjectByName('plane').geometry;
+	
+			var plane = new THREE.Plane(new THREE.Vector3(1, 0, 0), -6);
+		
+			var geometry = sliceGeometry(terrainGeometry, plane);
+
+			var material = new THREE.MeshBasicMaterial({ wireframe: true });
+			var mesh = new THREE.Mesh(geometry, material);
+			scene.add(mesh);
+
+
+			
+			var terrainGeometry = new THREE.Geometry().fromBufferGeometry(scene.getObjectByName('terrain').geometry);
+			
+			//var planeGeometry = new THREE.Geometry().fromBufferGeometry(scene.getObjectByName('plane').geometry);
+			//var planeGeometry = scene.getObjectByName('plane').geometry;
+	
+			var plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), -6);
+		
+			var geometry = sliceGeometry(terrainGeometry, plane);
+
+			var material = new THREE.MeshBasicMaterial({ wireframe: true });
+			var mesh = new THREE.Mesh(geometry, material);
+			scene.add(mesh);
+
+
+			*/
+	</script>
+</body>
+</html>

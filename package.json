@@ -1,0 +1,15 @@
+{
+  "name": "threejs-terrain-raycast-performance",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Vincent Van Ghelue <vincent.vanghelue@gmail.com> (https://github.com/vvanghelue)",
+  "license": "ISC",
+  "dependencies": {
+    "stats.js": "^0.17.0",
+    "three": "^0.86.0"
+  }
+}
